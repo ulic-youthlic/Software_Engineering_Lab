@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['enemy', 'floor', 'objects', 'sky', 'wall']
+
+roboflow:
+  workspace: rookiesworkspace
+  project: my-first-project-m4dbk
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/rookiesworkspace/my-first-project-m4dbk/dataset/3
