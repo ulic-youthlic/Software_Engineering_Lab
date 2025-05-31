@@ -9,7 +9,7 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
         super().__init__()
         # 增强的特征编码层
         self.feature_encoder = nn.Sequential(
-            nn.Linear(229, 64),  # 输入维度调整
+            nn.Linear(485, 64),  # 输入维度调整,需要按照实际特征维度修改
             nn.ReLU()
         )
         # LSTM层（双层层结构）
@@ -29,7 +29,7 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
         self.test_hidden = torch.randn(2, 1, 128)
 
     def _encode_features(self, objects, env_map):
-        """模拟特征编码（CPU版本）"""
+        """根据vision模块特征输出获取特征编码（CPU版本）"""
         # 敌人数量归一化
         num_enemies = len(objects.get('enemies', [])) / 10.0
 
@@ -37,21 +37,59 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
         num_items = len(objects.get('items', [])) / 5.0
 
         # 环境栅格展开（确保15x15=225维）
-        grid_features = np.array(env_map).flatten().tolist()
+        grid_features = np.array(env_map).flatten()#一维数组
         if len(grid_features) != 225:
-            grid_features = [0.0] * 225  # 容错处理
+            grid_features = np.zeros(225)  # 容错处理
 
-        # 最近敌人坐标（模拟数据）
-        if objects['enemies']:
-            last_enemy = objects['enemies'][0]
+        # 最近敌人坐标
+        if objects.get('enemies'):
+            last_enemy = np.array(objects['enemies'][0])
         else:
-            last_enemy = (0.0, 0.0)
+            last_enemy = np.zeros(2)
 
-        # 构建特征向量（229维）
-        features = [num_enemies, num_items] + grid_features + list(last_enemy)
+        # 添加YOLO特征
+        #yolo_features = objects.get('features', np.zeros(256))
+        yolo_features = objects.get('features')
+        if yolo_features is None or not hasattr(yolo_features, 'ndim'):
+            yolo_features = np.zeros(256)  # 默认零向量
+        if yolo_features.ndim == 0:  # 处理标量情况
+            yolo_features = np.array([yolo_features])
+
+        # 合并所有特征
+        combined = np.concatenate([
+            [num_enemies, num_items],
+            grid_features,
+            last_enemy,
+            yolo_features
+        ])
+
+        # 添加维度检查
+        print(f"特征维度检查: "
+              f"num_enemies: {type(num_enemies)} "
+              f"grid_features: {grid_features.shape} "
+              f"last_enemy: {last_enemy.shape} "
+              f"yolo_features: {yolo_features.shape}")
+
+        # 手动构建特征向量（229维）
+        #manual_features = [num_enemies, num_items] + grid_features + list(last_enemy)
+        '''
+        # 添加YOLO深层特征
+        yolo_features = objects['features'].tolist()  # 假设是numpy数组
+
+        #这个是把yolo深层特征和手动构建的特征结合，以后再修改，现在先用手动构建的特征
+        # 合并特征
+        combined = manual_features + yolo_features
+        return torch.FloatTensor(combined).cpu()
+        '''
+
+        print(f"[DEBUG] 手动特征统计: "
+              f"敌人数={num_enemies:.2f} 物品数={num_items:.2f} "
+              f"最近敌人坐标={last_enemy} 网格非零数={np.sum(env_map)}")
+
 
         # 转换为CPU tensor
-        return torch.FloatTensor(features).cpu()
+        #return torch.FloatTensor(manual_features).cpu()
+        return torch.FloatTensor(combined).cpu()
 
 
     def update(self, objects, env_map):

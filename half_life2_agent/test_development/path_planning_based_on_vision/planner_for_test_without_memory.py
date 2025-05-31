@@ -42,9 +42,8 @@ class Blank_PathPlanner_For_Test:
         if current_pos is None:  # 新增空值检查
             print("警告：当前坐标为None，使用默认坐标")
             current_pos = (0.5, 0.5)  # 默认屏幕中心坐标
-        # 无目标时返回空路径
+
         if not targets:
-            print("无有效目标，返回空路径")
             return []
 
             # 将归一化坐标转换为栅格坐标
@@ -95,23 +94,3 @@ class Blank_PathPlanner_For_Test:
         pass
         return None
     '''
-    def _query_memory_paths(self, pos):
-        pass
-
-    def _heuristic(self, start, end, heuristic):
-        pass
-
-    def _reconstruct_path(self, came_from, current):
-        pass
-
-    def _get_neighbors(self, current):
-        pass
-
-    def _cost(self, current, neighbor):
-        pass
-
-    def get_position(self):
-        pass
-
-    def execute(self,path):
-        pass
