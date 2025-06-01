@@ -1,12 +1,12 @@
 # 主程序架构 main.py
 import cv2
 import torch
-from memory_for_test import Blank_LSTM_Memory_For_Test
-from planner_for_test import Blank_PathPlanner_For_Test
-import vision
-from vision import VisionEngine
-from vision_for_test import Blank_VisionEngine_for_Test
-from controller_for_test import Blank_InputSimulator_for_test
+from .memory_for_test import Blank_LSTM_Memory_For_Test
+from .planner_for_test import Blank_PathPlanner_For_Test
+from . import vision
+from .vision import VisionEngine
+from .vision_for_test import Blank_VisionEngine_for_Test
+from .controller_for_test import Blank_InputSimulator_for_test
 import numpy as np
 import time
 import random
