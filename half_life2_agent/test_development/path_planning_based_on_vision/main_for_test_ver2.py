@@ -1,15 +1,16 @@
 # 主程序架构 main.py
 import cv2
 import torch
-from memory_for_test import Blank_LSTM_Memory_For_Test
-from planner_for_test import Blank_PathPlanner_For_Test
+from memory_for_test_ver2 import Blank_LSTM_Memory_For_Test
+from planner_for_test_ver2 import Blank_PathPlanner_For_Test
 import vision
 from vision import VisionEngine
-from vision_for_test import Blank_VisionEngine_for_Test
-from controller_for_test import Blank_InputSimulator_for_test
+from vision_for_test_ver2 import Blank_VisionEngine_for_Test
+from controller_for_test_ver2 import Blank_InputSimulator_for_test
 import numpy as np
 import time
 import random
+import keyboard
 
 class GameBot:
     def __init__(self):
@@ -27,6 +28,11 @@ class GameBot:
     def run(self):
         while True:
             try:
+                # 检查ESC键是否被按下
+                if keyboard.is_pressed('esc'):
+                    print("检测到ESC按键，程序退出")
+                    self.running = False
+                    exit(0)
                 # 处理流程
                 frame = self.vision.capture()  # 图像采集[5](@ref)
                 objects = self.vision.detect(frame)  # 目标检测[6](@ref)
@@ -52,10 +58,17 @@ class GameBot:
 
                 if path:  # 添加空路径保护
                     self.controller.execute(path)
+
                 else:
                     print("未找到有效路径")
-                    self._random_move()
+                    print("random_move未启用")
+                    #self._random_move()
+
+
                 time.sleep(0.1)  # 降低循环频率
+
+
+
             except Exception as e:
                 print(f"运行异常: {str(e)}")
                 import traceback
@@ -73,6 +86,12 @@ class GameBot:
         y = random.uniform(0.1, 0.9)
         self.controller._move_mouse(x, y)
 
+    def input(key):
+        if key=="escape":
+            exit(0)
+
+    def stop(self):
+        self.running=False
 if __name__ == "__main__":
     bot = GameBot()
 
