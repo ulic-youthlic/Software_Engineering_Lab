@@ -90,7 +90,7 @@ class GameBot:
                     movement_success = moved_distance > 0.05
 
                     # 更新记忆中的位置和地图
-                    self.memory.agent_direction = new_dir
+                    self.memory.agent_direction = new_dir[0]#只储存方向角度，不储存元组（还有个俯仰角不需要）
                     self.memory.update_position([dx, dy], movement_success)
 
                 except Exception as e:

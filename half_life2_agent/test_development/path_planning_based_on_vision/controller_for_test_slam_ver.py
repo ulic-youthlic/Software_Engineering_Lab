@@ -136,8 +136,8 @@ class EnhancedInputSimulator:
 
     def get_direction(self):
         """获取当前方向（0-360度）"""
-        return self.direction,self.pitch
-
+        #return self.direction,self.pitch
+        return self.direction   #返回元组会出问题，主循环也改过了反正不用pitch
     def explore_behavior(self):
         """增强的探索行为：包含精确转向"""
         # 随机选择动作类型：移动或转向

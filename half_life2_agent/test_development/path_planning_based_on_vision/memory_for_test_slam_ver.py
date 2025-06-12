@@ -68,6 +68,10 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
 
     def update_position(self, movement_vector, success):
         """更新智能体位置并记录反馈 movement_vector: [dx, dy] 移动向量 success: 是否成功移动"""
+        # 确保agent_position是可变的列表类型
+        if isinstance(self.agent_position, tuple):
+            self.agent_position = list(self.agent_position)
+
         if success:
             # 成功移动时更新位置
             self.agent_position[0] += movement_vector[0]
@@ -93,7 +97,12 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
     @staticmethod
     def _pos_to_grid(pos):
         """将归一化位置转换为栅格坐标"""
-        return (int(pos[0] * 14), int(pos[1] * 14))
+        # 确保位置在[0,1]范围内
+        x = max(0.0, min(1.0, pos[0]))
+        y = max(0.0, min(1.0, pos[1]))
+        # 转换为0-14的整数
+        return (int(x * 14), int(y * 14))
+        #return (int(pos[0] * 14), int(pos[1] * 14))
 
     def _create_ground_truth_map(self):
         """根据提供的迷宫布局创建真实地图"""
@@ -404,11 +413,12 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
             predicted_map.flatten()  # 将地图信息加入记忆向量
         ])
 
+        '''
+                # 转换为numpy输出
+                return lstm_out.squeeze().numpy()
+                '''
         return memory_vector.numpy()
-        '''
-        # 转换为numpy输出
-        return lstm_out.squeeze().numpy()
-        '''
+
 
     def _save_landmarks(self, objects):
         """存储关键位置到知识图谱"""
