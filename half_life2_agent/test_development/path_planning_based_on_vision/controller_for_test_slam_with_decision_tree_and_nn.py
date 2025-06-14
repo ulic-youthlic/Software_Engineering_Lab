@@ -43,6 +43,7 @@ class EnhancedInputSimulator:
 
     def precise_turn(self, angle_degrees, pitch_degrees=0):
         """精确转向指定角度和俯仰角（使用鼠标移动）"""
+        print(f"\n[控制器] 开始转向: {angle_degrees}度, 俯仰{pitch_degrees}度\n")  # 添加这行
         # 计算基于游戏引擎的视角移动量（经验值）
         MOUSE_SCALE_FACTOR = 10  # 需要根据游戏调整
 
@@ -273,10 +274,16 @@ class EnhancedInputSimulator:
         time.sleep(random.uniform(0.1, 0.3))
 
     def get_position(self):
-        """获取当前鼠标位置"""
-        x, y = pyautogui.position()
-        return (x / self.screen_width, y / self.screen_height)
-
+        """获取当前鼠标位置并确保有效性"""
+        try:
+            x, y = pyautogui.position()
+            # 确保位置在有效范围内
+            x = max(0, min(self.screen_width - 1, x)) / self.screen_width
+            y = max(0, min(self.screen_height - 1, y)) / self.screen_height
+            return (x, y)
+        except:
+            print("warning! get_position failed,return default (0.5,0.5)")
+            return (0.5, 0.5)  # 默认位置
     def random_move(self):
         """随机移动鼠标，避免卡住"""
         x = random.uniform(0.1, 0.9)

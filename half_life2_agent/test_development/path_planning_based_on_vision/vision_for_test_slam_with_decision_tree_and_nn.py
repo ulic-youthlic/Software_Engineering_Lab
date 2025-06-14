@@ -1,3 +1,5 @@
+import traceback
+import torch.nn as nn
 import cv2
 from ultralytics import YOLO
 import pyautogui
@@ -16,6 +18,7 @@ class EnhancedVisionEngine:
         self.last_frame = None
         self.frame_rate = 30  # 目标帧率
         self.last_capture_time = time.time()
+
 
     def capture(self, force=False):
         """智能截图，控制帧率避免过度消耗资源"""
@@ -70,8 +73,14 @@ class EnhancedVisionEngine:
                     )
                     enemies.append(center)
 
+
             # 特征提取
             features = self._extract_deep_features(results)
+            print(f"EnhancedVisionEngine,detect:feature.shape{features.shape},enemies:{enemies}")
+            # 确保最终输出为260维
+            if len(features) != 260:
+                features = features[:260] if len(features) > 260 else np.pad(features, (0, 260 - len(features)))
+
             return {'enemies': enemies, 'items': [], 'features': features}
 
         except Exception as e:
@@ -90,10 +99,21 @@ class EnhancedVisionEngine:
                 # 使用边界框信息作为特征
                 features = []
                 for box in results.boxes:
-                    features.extend(box.xyxy[0].cpu().numpy() / [self.screen_width, self.screen_height] * 2)
+                    #features.extend(box.xyxy[0].cpu().numpy() / [self.screen_width, self.screen_height] * 2)
+                    # 正确归一化边界框坐标,上面哪个是4/2显然不对
+                    xyxy = box.xyxy[0].cpu().numpy()
+                    normalized = np.array([
+                        xyxy[0] / self.screen_width,
+                        xyxy[1] / self.screen_height,
+                        xyxy[2] / self.screen_width,
+                        xyxy[3] / self.screen_height
+                    ])
+                    features.extend(normalized * 2)  # 缩放特征值
+
                 return np.array(features[:256])  # 截断为256维
-        except Exception:
-            pass
+        except Exception as e:
+            print("_extract_deep_features failure:")
+            print(f"视觉系统详细错误: {str(e)}\n{traceback.format_exc()}")
 
         return np.random.randn(256)  # 默认返回随机向量
 
@@ -103,9 +123,11 @@ class EnhancedVisionEngine:
             return np.zeros((15, 15))
 
         try:
+
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             kp, _ = self.orb.detectAndCompute(gray, None)
             return self._create_grid(kp)
+
         except Exception as e:
             print(f"地图构建失败: {str(e)}")
             return np.zeros((15, 15))

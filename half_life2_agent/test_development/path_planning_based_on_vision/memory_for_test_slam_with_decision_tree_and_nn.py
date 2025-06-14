@@ -68,6 +68,7 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
 
     def update_position(self, movement_vector, success):
         """更新智能体位置并记录反馈 movement_vector: [dx, dy] 移动向量 success: 是否成功移动"""
+        print(f"[记忆模块] 更新位置: 移动向量={movement_vector}, 成功={success}")
         # 确保agent_position是可变的列表类型
         if isinstance(self.agent_position, tuple):
             self.agent_position = list(self.agent_position)
@@ -141,69 +142,15 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
         return gt_map
 
     def _encode_features(self, objects):
-        """根据vision模块特征输出获取特征编码（CPU版本）"""
-        # 敌人数量归一化
-        num_enemies = len(objects.get('enemies', [])) / 10.0
+        """直接使用视觉模块提供的260维特征"""
+        try:
+            # 直接获取视觉模块构建的260维特征
+            features = objects.get('features', np.zeros(260, dtype=np.float32))
+            return torch.FloatTensor(features).unsqueeze(0).cpu()
+        except Exception as e:
+            print(f"特征编码失败: {str(e)}")
+            return torch.zeros(1, 260)
 
-        # 物品数量归一化（模拟值）
-        num_items = len(objects.get('items', [])) / 5.0
-
-        '''
-        # 环境栅格展开（确保15x15=225维）
-        grid_features = np.array(env_map).flatten()#一维数组
-        if len(grid_features) != 225:
-            grid_features = np.zeros(225)  # 容错处理
-        '''
-
-        # 最近敌人坐标
-        if objects.get('enemies'):
-            last_enemy = np.array(objects['enemies'][0])
-        else:
-            last_enemy = np.zeros(2)
-
-        # 添加YOLO特征
-        #yolo_features = objects.get('features', np.zeros(256))
-        yolo_features = objects.get('features')
-        if yolo_features is None or not hasattr(yolo_features, 'ndim'):
-            yolo_features = np.zeros(256)  # 默认零向量
-        if yolo_features.ndim == 0:  # 处理标量情况
-            yolo_features = np.array([yolo_features])
-
-        # 合并所有特征
-        combined = np.concatenate([
-            [num_enemies, num_items],
-            #grid_features,     #现在不需要它了，这个特征在其它部分处理
-            last_enemy,
-            yolo_features
-        ])
-
-        # 添加维度检查
-        print(f"特征维度检查: "
-              f"num_enemies: {type(num_enemies)} "
-              #f"grid_features: {grid_features.shape} "
-              f"last_enemy: {last_enemy.shape} "
-              f"yolo_features: {yolo_features.shape}")
-
-        # 手动构建特征向量（229维）
-        #manual_features = [num_enemies, num_items] + grid_features + list(last_enemy)
-        '''
-        # 添加YOLO深层特征
-        yolo_features = objects['features'].tolist()  # 假设是numpy数组
-
-        #这个是把yolo深层特征和手动构建的特征结合，以后再修改，现在先用手动构建的特征
-        # 合并特征
-        combined = manual_features + yolo_features
-        return torch.FloatTensor(combined).cpu()
-        '''
-
-        print(f"[DEBUG] 手动特征统计: "
-              f"敌人数={num_enemies:.2f} 物品数={num_items:.2f} "
-              f"最近敌人坐标={last_enemy}") #网格非零数={np.sum(env_map)}
-
-
-        # 转换为CPU tensor
-        #return torch.FloatTensor(manual_features).cpu()
-        return torch.FloatTensor(combined).cpu()
 
     def _calculate_metrics(self, predicted_map):
         """计算预测地图与真实地图的准确率和召回率"""
@@ -333,91 +280,109 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
         :return:
         '''
         """测试版记忆更新（全CPU操作）"""
-        if self.simulation_mode:
-            return self._simulate_memory()
+        try:
+            if self.simulation_mode:
+                return self._simulate_memory()
 
-         # 更新计数器
-        self.update_count += 1
+            # 更新计数器
+            self.update_count += 1
 
-        # 将视觉输入的环境地图转换为张量
-        visual_map = torch.tensor(env_map, dtype=torch.float32)
+            # 将视觉输入的环境地图转换为张量
+            visual_map = torch.tensor(env_map, dtype=torch.float32)
 
-        # 检测到敌人时只记录，不触发战斗
-        if 'enemies' in objects and len(objects['enemies']) > 0:
-            print(f"检测到 {len(objects['enemies'])} 个敌人，但暂时跳过战斗")
+            # 检测到敌人时只记录，不触发战斗
+            if 'enemies' in objects and len(objects['enemies']) > 0:
+                print(f"检测到 {len(objects['enemies'])} 个敌人，但暂时跳过战斗")
 
-        # 特征编码
-        with torch.no_grad():
-            # 提取当前帧的特征
-            raw_features = self._encode_features(objects)
-            encoded = self.feature_encoder(raw_features.unsqueeze(0))  # 添加batch维度
+            # 特征编码
+            with torch.no_grad():
+                # 提取当前帧的特征  添加内部异常处理
+                try:
+                    raw_features = self._encode_features(objects)
+                    encoded = self.feature_encoder(raw_features.unsqueeze(0))
+                except Exception as e:
+                    print(f"特征编码失败: {str(e)}")
+                    raw_features = torch.zeros(260)  # 使用安全的默认值
+                    encoded = self.feature_encoder(raw_features.unsqueeze(0))
 
-            # LSTM处理获取短期记忆
-            lstm_out, self.hidden = self.lstm(
-                encoded.view(1, 1, -1),  # 调整形状为 (batch, seq, feature)
-                self.hidden
-            )
+                # LSTM处理获取短期记忆
+                lstm_out, self.hidden = self.lstm(
+                    encoded.view(1, 1, -1),  # 调整形状为 (batch, seq, feature)
+                    self.hidden
+                )
 
-            #  更新环境地图（核心功能）
-            #  将LSTM输出转换为地图更新量
-            map_update = self.map_update_layer(lstm_out.squeeze(0))
-            map_update = map_update.view(15, 15)
+                #  更新环境地图（核心功能）
+                #  将LSTM输出转换为地图更新量
+                map_update = self.map_update_layer(lstm_out.squeeze(0))
+                map_update = map_update.view(15, 15)
 
-            # 动态更新地图：融合当前视觉信息和历史记忆
-            self.env_map = 0.3 * self.env_map + 0.7 * visual_map
+                # 动态更新地图：融合当前视觉信息和历史记忆
+                self.env_map = 0.3 * self.env_map + 0.7 * visual_map
 
-            # 应用LSTM生成的更新量（突出重要区域）
-            self.env_map = torch.maximum(self.env_map, map_update)
+                # 应用LSTM生成的更新量（突出重要区域）
+                self.env_map = torch.maximum(self.env_map, map_update)
 
-            # 二值化处理（阈值0.5）
-            predicted_map = (self.env_map > 0.5).float()
+                # 二值化处理（阈值0.5）
+                predicted_map = (self.env_map > 0.5).float()
 
-            # 打印地图更新信息
-            obstacle_count = torch.sum(predicted_map > 0).item()
-            print(f"[记忆模块] 地图更新: 新增障碍{obstacle_count}个")
-#
-        # 定期调试输出
-        if self.update_count % self.debug_interval == 0:
-            # 计算准确率和召回率
-            accuracy, recall = self._calculate_metrics(predicted_map)
+                # 打印地图更新信息
+                obstacle_count = torch.sum(predicted_map > 0).item()
+                print(f"[记忆模块] 地图更新: 新增障碍{obstacle_count}个")
+            #
+            # 定期调试输出
+            if self.update_count % self.debug_interval == 0:
+                # 计算准确率和召回率
+                accuracy, recall = self._calculate_metrics(predicted_map)
 
-            # 更新统计
-            self.total_accuracy += accuracy
-            self.total_recall += recall
+                # 更新统计
+                self.total_accuracy += accuracy
+                self.total_recall += recall
 
-            # 计算平均指标
-            avg_accuracy = self.total_accuracy / (self.update_count // self.debug_interval)
-            avg_recall = self.total_recall / (self.update_count // self.debug_interval)
+                # 计算平均指标
+                avg_accuracy = self.total_accuracy / (self.update_count // self.debug_interval)
+                avg_recall = self.total_recall / (self.update_count // self.debug_interval)
 
-            # 计算运行时间
-            elapsed_time = time.time() - self.start_time
-            fps = self.update_count / elapsed_time
+                # 计算运行时间
+                elapsed_time = time.time() - self.start_time
+                fps = self.update_count / elapsed_time
 
-            # 打印统计信息
-            print("\n===== 地图统计 =====")
-            print(f"更新次数: {self.update_count}")
-            print(f"当前准确率: {accuracy:.4f}")
-            print(f"当前召回率: {recall:.4f}")
-            print(f"平均准确率: {avg_accuracy:.4f}")
-            print(f"平均召回率: {avg_recall:.4f}")
-            print(f"运行时间: {elapsed_time:.2f}秒")
-            print(f"处理速度: {fps:.2f} FPS")
-            print("==================\n")
+                # 打印统计信息
+                print("\n===== 地图统计 =====")
+                print(f"更新次数: {self.update_count}")
+                print(f"当前准确率: {accuracy:.4f}")
+                print(f"当前召回率: {recall:.4f}")
+                print(f"平均准确率: {avg_accuracy:.4f}")
+                print(f"平均召回率: {avg_recall:.4f}")
+                print(f"运行时间: {elapsed_time:.2f}秒")
+                print(f"处理速度: {fps:.2f} FPS")
+                print("==================\n")
 
-            # 可视化地图
-            self._visualize_map(predicted_map, accuracy, recall)
+                # 可视化地图
+                self._visualize_map(predicted_map, accuracy, recall)
 
-        # 返回包含地图信息的记忆向量
-        memory_vector = torch.cat([
-            lstm_out.squeeze(),
-            predicted_map.flatten()  # 将地图信息加入记忆向量
-        ])
+            # 返回包含地图信息的记忆向量
+            memory_vector = torch.cat([
+                lstm_out.squeeze(),
+                predicted_map.flatten()  # 将地图信息加入记忆向量,使用连续置信度值
+            ])
 
-        '''
-                # 转换为numpy输出
-                return lstm_out.squeeze().numpy()
-                '''
-        return memory_vector.numpy()
+            if self.env_map.ndim != 2:
+                self.env_map = self.env_map.reshape(15, 15)
+
+            '''
+                    # 转换为numpy输出
+                    return lstm_out.squeeze().numpy()
+                    '''
+            # return memory_vector.numpy()
+            return {
+                'features': lstm_out.squeeze().numpy(),
+                #'map': self.env_map.numpy().flatten()  # 单独返回地图数据
+                'map': self.env_map.detach().cpu().numpy()  # 确保是二维数组
+            }
+        except Exception as e:
+            print(f"记忆更新失败: {str(e)}")
+            # 返回空字典避免类型错误
+            return {'features': np.zeros(128), 'map': np.zeros((15,15))}
 
 
     def _save_landmarks(self, objects):
@@ -434,3 +399,65 @@ class Blank_LSTM_Memory_For_Test(nn.Module):
         self.test_hidden = 0.9 * self.test_hidden + 0.1 * torch.randn(2, 1, 128)
         return self.test_hidden.mean().item()
 
+'''
+    def _encode_features(self, objects):
+        """根据vision模块特征输出获取特征编码（CPU版本）"""
+        try:
+            # 敌人数量归一化
+            num_enemies = len(objects.get('enemies', [])) / 10.0
+
+            # 物品数量归一化（模拟值）
+            num_items = len(objects.get('items', [])) / 5.0
+
+
+            # 最近敌人坐标
+            if objects.get('enemies') and len(objects['enemies']) > 0:
+                enemy_coords = np.array(objects['enemies'][0], dtype=np.float32)
+            else:
+                enemy_coords = np.zeros(2, dtype=np.float32)
+
+            # 添加YOLO特征
+            # yolo_features = objects.get('features', np.zeros(256))
+            # yolo_features = objects.get('features')
+            yolo_features = objects.get('features', np.zeros(256, dtype=np.float32))
+            if yolo_features is None or not hasattr(yolo_features, 'ndim'):
+                yolo_features = np.zeros(256)  # 默认零向量
+            if yolo_features.ndim == 0:  # 处理标量情况
+                yolo_features = np.array([yolo_features])
+
+            # 确保所有部分都是1维数组
+            basic_features = np.array([num_enemies, num_items])
+
+            # 合并所有特征
+            combined = np.concatenate([
+                basic_features,
+                # grid_features,     #现在不需要它了，这个特征在其它部分处理
+                enemy_coords,
+                yolo_features
+            ])
+
+            # 添加维度检查
+            print(f"特征维度检查: "
+                  f"num_enemies: {type(num_enemies)} "
+                  # f"grid_features: {grid_features.shape} "
+                  f"last_enemy: {enemy_coords.shape} "
+                  f"yolo_features: {yolo_features.shape}")
+
+            # 手动构建特征向量（229维）
+            # manual_features = [num_enemies, num_items] + grid_features + list(last_enemy)
+
+            print(f"[DEBUG] 手动特征统计: "
+                  f"敌人数={num_enemies:.2f} 物品数={num_items:.2f} "
+                  f"最近敌人坐标={enemy_coords}")  # 网格非零数={np.sum(env_map)}
+
+            # 转换为CPU tensor
+            # return torch.FloatTensor(manual_features).cpu()
+            return torch.FloatTensor(combined).cpu()
+        except Exception as e:
+            print(f"记忆更新失败: {str(e)}")
+            # 返回安全的默认记忆数据
+            return {
+                'features': np.zeros(128),
+                'map': np.zeros(225)
+            }
+'''

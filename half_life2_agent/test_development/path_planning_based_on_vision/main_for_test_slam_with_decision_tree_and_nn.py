@@ -1,14 +1,20 @@
+import traceback
+from collections import deque
 import cv2
 import torch
 import numpy as np
 import time
 import keyboard
 import os
-from vision_for_test_slam_with_decision_tree_and_nn import EnhancedVisionEngine
+#from vision_for_test_slam_with_decision_tree_and_nn import EnhancedVisionEngine
+from vision_for_test_slam_with_decision_tree_and_nn_test import EnhancedVisionEngine
 from controller_for_test_slam_with_decision_tree_and_nn import EnhancedInputSimulator
 from memory_for_test_slam_with_decision_tree_and_nn import Blank_LSTM_Memory_For_Test
 from planner_for_test_slam_with_decision_tree_and_nn import Blank_PathPlanner_For_Test
-
+from decision_tree_and_nn import EnhancedDecisionNetwork
+from decision_tree_and_nn import ExplorationPlanner
+from decision_tree_and_nn import DecisionTreeRegressor
+from decision_tree_and_nn import HybridDecisionSystem
 
 class GameBot:
     def __init__(self):
@@ -30,6 +36,26 @@ class GameBot:
         # 性能统计
         self.processing_times = []
         self.detection_counts = []
+
+        # 添加决策系统
+        self.decision_system = HybridDecisionSystem()
+
+        # 记录近期奖励
+        self.recent_rewards = deque(maxlen=100)
+
+        # 训练控制
+        self.train_interval = 10  # 每10步训练一次
+        self.step_count = 0
+
+        # 地图缓存
+        self.prev_map = None
+
+        self.decision_system = HybridDecisionSystem()
+        print(f"[系统] 决策系统初始化: {type(self.decision_system).__name__}")
+        print(f"记忆模块模拟模式状态: {self.memory.simulation_mode}")
+        print(f"视觉特征维度: {self.vision.detect(np.zeros((1080, 1920, 3), dtype=np.uint8))['features'].shape}")
+        print(f"内存输入维度: {self.memory.feature_encoder[0].in_features}")
+        print(f"决策网络输入维度: {self.decision_system.decision_net.encoder[0].in_features}")
 
         print("game bot initialized")
 
@@ -53,14 +79,29 @@ class GameBot:
                     # 1. 采集图像
                     frame = self.vision.capture()
 
-                    # 2. 目标检测
+                    # 2. 目标检测WW
                     objects = self.vision.detect(frame)
 
                     # 3. 环境建模
                     env_map = self.vision.build_map(frame)
 
                     # 4. 记忆更新
-                    memory_data = self.memory.update(objects, env_map)
+                    #memory_data = self.memory.update(objects, env_map)
+                    try:
+                        memory_data = self.memory.update(objects, env_map)
+                        # 增加维度检查
+                        if 'features' in memory_data:
+                            print(f"记忆特征维度: {memory_data['features'].shape}")
+                        if 'map' in memory_data:
+                            print(f"地图维度: {memory_data['map'].shape}")
+
+                        # 强制转换为字典
+                        if not isinstance(memory_data, dict):
+                            print(f"记忆数据不是字典，实际类型: {type(memory_data)}")
+                            memory_data = {'features': np.zeros(128), 'map': np.zeros(225)}
+                    except Exception as e:
+                        print(f"记忆更新异常: {str(e)}")
+                        memory_data = {'features': np.zeros(128), 'map': np.zeros(225)}
 
                     # 5. 获取当前位置
                     current_pos = self.controller.get_position()
@@ -68,16 +109,48 @@ class GameBot:
                     # 6. 路径规划
                     path = self.planner.plan(current_pos, objects['enemies'], memory_data)
 
-                    # 7. 执行动作
+                    # 7. 混合决策
+                    try:
+                        # 增加特征维度检查
+                        vision_features = objects['features']
+                        print(f"视觉特征维度: {vision_features.shape}")
+
+                        net_input = self.decision_system.prepare_input(
+                            self.memory, vision_features, self.controller
+                        )
+                        print(f"决策网络输入实际维度: {net_input.shape[1]}")
+
+                        action = self.decision_system.decide_action(
+                            # self.memory.env_map.detach().cpu().numpy(),
+                            memory_data,  # 改为传入memory data (字典，后面对应处理的地方也要求用字典)
+                            objects['features'],
+                            self.controller,
+                            self.memory
+                        )
+                        print(f"[决策系统] 返回动作: {action}")  # 添加这行
+                    except Exception as e:
+                        print(f"决策系统错误: {str(e)}")
+                        # 默认探索行为
+                        action = ('explore', 0)
+                    # 8. 执行动作
                     prev_pos = self.controller.get_position()
-                    prev_dir = self.controller.get_direction()
+                    prev_map = self.memory.env_map.clone().detach()
 
-                    if path:
-                        self.controller.execute(path)
-                    else:
-                        self.controller.random_move()
 
-                    # 获取执行后的状态
+                    # 在决策系统调用后
+                    print(f"[主循环] 准备执行动作: {action}")
+                    # 执行动作
+                    if action[0] == 'move':
+                        #self.controller.move_direction('forward', action[1])
+                        self.controller.move_direction('forward')
+                        print(f"[控制器] 执行移动动作")
+                    elif action[0] == 'turn':
+                        self.controller.precise_turn(action[1], 0)  # 无俯仰角
+                        print(f"[控制器] 执行转向动作: {action[1]}度")
+                    else:  # 等待
+                        time.sleep(0.5)
+                        print(f"[控制器] 等待")
+                    # 获取执行后状态
                     new_pos = self.controller.get_position()
                     new_dir = self.controller.get_direction()
 
@@ -90,11 +163,47 @@ class GameBot:
                     movement_success = moved_distance > 0.05
 
                     # 更新记忆中的位置和地图
-                    self.memory.agent_direction = new_dir[0]#只储存方向角度，不储存元组（还有个俯仰角不需要）
+                    #self.memory.agent_direction = new_dir[0]#只储存方向角度，不储存元组（还有个俯仰角不需要）
+                    self.memory.agent_direction = new_dir  # 只储存方向角度，不储存元组（还有个俯仰角不需要）
                     self.memory.update_position([dx, dy], movement_success)
 
+
+                    # 9.计算奖励
+                    success = self._is_movement_successful(prev_pos, new_pos)
+                    reward = self.decision_system.calculate_reward(
+                        self.memory.env_map.detach().cpu().numpy(),
+                        prev_map.cpu().numpy(),
+                        action,
+                        success,
+                        new_pos  # 添加当前的位置
+                    )
+                    self.recent_rewards.append(reward)
+                    print(f"[行为奖励]:{reward}")
+
+                    # 10. 记录经验
+                    current_state = self.decision_system.prepare_input(
+                        self.memory, objects['features'], self.controller
+                    )
+                    self.decision_system.record_experience(
+                        current_state,
+                        action,
+                        reward,
+                        self.decision_system.prepare_input(self.memory, objects['features'], self.controller),
+                        False  # 假设不会结束
+                    )
+
+                    # 11. 定期训练
+                    self.step_count += 1
+                    if self.step_count % self.train_interval == 0:
+                        loss = self.decision_system.update_network()
+                        print(f"训练神经网络，损失值: {loss:.4f}")
+
+                        # 调整神经网络影响力
+                        self.decision_system.adjust_influence_weight(self.recent_rewards)
+                        print(f"更新神经网络影响力权重: {self.decision_system.nn_influence:.2f}")
+
                 except Exception as e:
-                    print(f"main loop error: {str(e)}")
+                    print(f"main loop error: {str(e)}\n{traceback.format_exc()}")
                     # 重置关键状态
                     self.memory.hidden = None
                     # 保存错误截图
@@ -145,6 +254,12 @@ class GameBot:
 
         print("game bot offline")
 
+    def _is_movement_successful(self, prev_pos, new_pos):
+        """判断移动是否成功"""
+        dx = new_pos[0] - prev_pos[0]
+        dy = new_pos[1] - prev_pos[1]
+        distance = (dx ** 2 + dy ** 2) ** 0.5
+        return distance > 0.03  # 移动超过阈值视为成功
 
 if __name__ == "__main__":
     bot = GameBot()
@@ -153,7 +268,6 @@ if __name__ == "__main__":
     print("测试视觉模块...")
     test_frame = bot.vision.capture(force=True)
     cv2.imwrite('debug/test_screenshot.jpg', test_frame)
-
     print("测试目标检测...")
     test_objects = bot.vision.detect(test_frame)
     print(f"检测到 {len(test_objects['enemies'])} 个目标")
