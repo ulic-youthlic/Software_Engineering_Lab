@@ -15,6 +15,7 @@ from decision_tree_and_nn import EnhancedDecisionNetwork
 from decision_tree_and_nn import ExplorationPlanner
 from decision_tree_and_nn import DecisionTreeRegressor
 from decision_tree_and_nn import HybridDecisionSystem
+from log_system import EnhancedLogger
 
 class GameBot:
     def __init__(self):
@@ -51,6 +52,10 @@ class GameBot:
         self.prev_map = None
 
         self.decision_system = HybridDecisionSystem()
+
+        #日志系统
+        self.logger = EnhancedLogger()
+
         print(f"[系统] 决策系统初始化: {type(self.decision_system).__name__}")
         print(f"记忆模块模拟模式状态: {self.memory.simulation_mode}")
         print(f"视觉特征维度: {self.vision.detect(np.zeros((1080, 1920, 3), dtype=np.uint8))['features'].shape}")
@@ -135,7 +140,8 @@ class GameBot:
                     # 8. 执行动作
                     prev_pos = self.controller.get_position()
                     prev_map = self.memory.env_map.clone().detach()
-
+                    # 获取执行前角色位置
+                    prev_char_pos = self.controller.get_character_position()
 
                     # 在决策系统调用后
                     print(f"[主循环] 准备执行动作: {action}")
@@ -151,15 +157,17 @@ class GameBot:
                         time.sleep(0.5)
                         print(f"[控制器] 等待")
                     # 获取执行后状态
-                    new_pos = self.controller.get_position()
+                    new_pos = self.controller.get_position()#这个是鼠标位置
                     new_dir = self.controller.get_direction()
+                    # 执行动作后角色位置
+                    new_char_pos = self.controller.get_character_position()
 
-                    # 计算移动向量
-                    dx = new_pos[0] - prev_pos[0]
-                    dy = new_pos[1] - prev_pos[1]
+                    # 计算角色移动向量
+                    dx = new_char_pos[0] - prev_char_pos[0]
+                    dy = new_char_pos[1] - prev_char_pos[1]
                     moved_distance = (dx ** 2 + dy ** 2) ** 0.5
 
-                    # 判断是否成功移动（移动距离>阈值）A
+                    # 判断是否成功移动（移动距离>阈值）
                     movement_success = moved_distance > 0.05
 
                     # 更新记忆中的位置和地图
@@ -179,6 +187,23 @@ class GameBot:
                     )
                     self.recent_rewards.append(reward)
                     print(f"[行为奖励]:{reward}")
+
+                    # 在执行行为后，收集日志数据
+                    cycle_data = {
+                        'cycle_count': self.cycle_count,
+                        'action': action,  # (action_type, param)
+                        'prev_map': prev_map,  # 行为前的地图
+                        'current_map': self.memory.env_map.detach().cpu().numpy().copy(),
+                        'character_pos': self.controller.get_character_position(),
+                        'direction': self.controller.get_direction(),
+                        'success': success,
+                        'reward': reward
+                    }
+
+                    # 记录日志
+                    self.logger.log_cycle(cycle_data)
+
+
 
                     # 10. 记录经验
                     current_state = self.decision_system.prepare_input(
@@ -202,6 +227,7 @@ class GameBot:
                         self.decision_system.adjust_influence_weight(self.recent_rewards)
                         print(f"更新神经网络影响力权重: {self.decision_system.nn_influence:.2f}")
 
+
                 except Exception as e:
                     print(f"main loop error: {str(e)}\n{traceback.format_exc()}")
                     # 重置关键状态
@@ -223,6 +249,7 @@ class GameBot:
                 # 控制循环频率
                 time.sleep(max(0, 0.1 - cycle_time))
 
+            self.logger.finalize_logs()
         finally:
             self.shutdown()
 

@@ -393,6 +393,7 @@ class HybridDecisionSystem:
 
         # 处理探索动作
         if action[0] == 'explore':
+            print("WARNING! current action is 'explore' ")
             # 探索未知区域奖励
             if np.mean(map_data) < 0.7:
                 reward += 0.7
@@ -403,6 +404,8 @@ class HybridDecisionSystem:
 
         # 1. 成功探索奖励
         if success and action[0] == 'move':
+            #成功移动基础奖励
+            reward+=1.0
             # 计算信息增益（地图变化）
             info_gain = np.sum(np.abs(map_data - prev_map))
             reward += 0.1 * info_gain

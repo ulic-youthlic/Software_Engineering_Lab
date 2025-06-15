@@ -1,3 +1,5 @@
+import math
+
 import pydirectinput
 import pyautogui
 import time
@@ -17,6 +19,8 @@ class EnhancedInputSimulator:
         self.click_delay = 0.3
         self.bezier_points = 20
         self.jitter_range = 20  # 随机抖动范围
+        # 角色位置跟踪
+        self.character_position = [0.5, 0.5]  # 归一化角色位置 [x, y]
 
         # 鼠标灵敏度设置
         self.horizontal_sensitivity = 1.0  # 水平转向灵敏度
@@ -106,8 +110,24 @@ class EnhancedInputSimulator:
         print(f"\n执行动作：转向\n")
         '''
 
-    def move_direction(self, direction):
+    def move_direction(self, direction, distance=0.1):
         """按指定方向移动"""
+        # 计算移动向量（基于方向和距离）
+        rad = math.radians(self.direction)
+        move_vector = [
+            distance * math.cos(rad),
+            distance * math.sin(rad)
+        ]
+
+        # 更新角色位置
+        self.character_position[0] += move_vector[0]
+        self.character_position[1] += move_vector[1]
+
+        # 边界检查
+        self.character_position[0] = max(0.0, min(1.0, self.character_position[0]))
+        self.character_position[1] = max(0.0, min(1.0, self.character_position[1]))
+
+        #执行按键操作
         if direction in self.move_keys:
             if direction in self.move_keys:
                 key = self.move_keys[direction]
@@ -116,7 +136,7 @@ class EnhancedInputSimulator:
                 pydirectinput.keyUp(key)
                 time.sleep(0.1)  # 按键释放后短暂延迟
 
-        print(f"\n执行动作：向{direction}移动\n")
+        print(f"角色移动: {direction} 距离{distance:.2f} → 新位置{self.character_position}")
 
     def turn(self, angle, pitch=0):
         """转向指定角度和俯仰角并更新方向"""
@@ -290,3 +310,7 @@ class EnhancedInputSimulator:
         y = random.uniform(0.1, 0.9)
         self.move_to(x, y)
         print("执行随机移动")
+
+    def get_character_position(self):
+        """获取角色位置（非鼠标位置）"""
+        return tuple(self.character_position)
