@@ -9,8 +9,8 @@ import time
 
 class EnhancedVisionEngine:
     def __init__(self, model_path='best.pt'):
-        self.screen_height = 1080
-        self.screen_width = 1920
+        self.screen_height = 1600
+        self.screen_width = 2560
         self.model = YOLO(model_path)
         self.orb = cv2.ORB_create(1000)
         self.max_pic_num = 40

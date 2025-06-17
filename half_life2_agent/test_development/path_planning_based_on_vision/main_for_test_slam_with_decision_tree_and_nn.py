@@ -66,7 +66,7 @@ class GameBot:
 
         print(f"[系统] 决策系统初始化: {type(self.decision_system).__name__}")
         print(f"记忆模块模拟模式状态: {self.memory.simulation_mode}")
-        print(f"视觉特征维度: {self.vision.detect(np.zeros((1080, 1920, 3), dtype=np.uint8))['features'].shape}")
+        print(f"视觉特征维度: {self.vision.detect(np.zeros((1600, 2560, 3), dtype=np.uint8))['features'].shape}")
         print(f"内存输入维度: {self.memory.feature_encoder[0].in_features}")
         print(f"决策网络输入维度: {self.decision_system.decision_net.encoder[0].in_features}")
 
