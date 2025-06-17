@@ -1,0 +1,4 @@
+{"cycle": 0, "timestamp": "2025-06-17T18:26:42.761349", "action": {"type": "turn", "param": -180.0}, "character": {"x": 0.5, "y": 0.5, "direction": 180.0}, "success": false, "reward": 0.0, "map_image": "map_0000.png"}
+{"cycle": 2, "timestamp": "2025-06-17T18:26:52.098801", "action": {"type": "move", "param": 0.1428571428571429}, "character": {"x": 0.30000000000000004, "y": 0.5, "direction": 180.0}, "success": false, "reward": 3.5, "map_image": "map_0002.png"}
+{"cycle": 3, "timestamp": "2025-06-17T18:26:53.759290", "action": {"type": "turn", "param": -17.28149837181661}, "character": {"x": 0.30000000000000004, "y": 0.5, "direction": 162.7185016281834}, "success": false, "reward": 0.0, "map_image": "map_0003.png"}
+{"cycle": 4, "timestamp": "2025-06-17T18:26:55.227553", "action": {"type": "turn", "param": 155.64795903524754}, "character": {"x": 0.30000000000000004, "y": 0.5, "direction": 318.3664606634309}, "success": false, "reward": 4.0, "map_image": "map_0004.png"}

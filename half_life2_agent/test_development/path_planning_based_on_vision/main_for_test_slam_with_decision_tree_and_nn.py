@@ -56,6 +56,14 @@ class GameBot:
         #日志系统
         self.logger = EnhancedLogger()
 
+        #自瞄开启按钮
+        self.is_auto_aim=False
+
+        #战斗持续
+        self.is_in_combat=False
+        self.combat_duration=5
+        self.combat_time=0
+
         print(f"[系统] 决策系统初始化: {type(self.decision_system).__name__}")
         print(f"记忆模块模拟模式状态: {self.memory.simulation_mode}")
         print(f"视觉特征维度: {self.vision.detect(np.zeros((1080, 1920, 3), dtype=np.uint8))['features'].shape}")
@@ -70,6 +78,7 @@ class GameBot:
         self.start_time = time.time()
 
         try:
+
             while self.running:
                 cycle_start = time.time()
 
@@ -86,6 +95,20 @@ class GameBot:
 
                     # 2. 目标检测WW
                     objects = self.vision.detect(frame)
+
+                    # 2.1 战斗分支——中断当前行为进入战斗
+                    if objects.get('enemies') and len(objects['enemies']) > 0 and self.combat_time<=0:
+                        #self._handle_combat(objects['enemies'])
+                        self.is_in_combat=True
+                        self.combat_time=self.combat_duration
+                    if self.is_in_combat:
+                        if self.combat_time>=0:
+                            self._handle_combat(objects['enemies'])
+                            self.combat_time -= 1
+                            print(f"combat end in {self.combat_time}")
+                            continue
+
+                    self.is_in_combat=False
 
                     # 3. 环境建模
                     env_map = self.vision.build_map(frame)
@@ -287,6 +310,33 @@ class GameBot:
         dy = new_pos[1] - prev_pos[1]
         distance = (dx ** 2 + dy ** 2) ** 0.5
         return distance > 0.03  # 移动超过阈值视为成功
+
+    def _handle_combat(self, enemies):
+        """执行战斗行为：瞄准并攻击敌人"""
+        print(f"战斗状态！发现{len(enemies)}个敌人")
+
+        if(len(enemies)>0):
+            # 选择最近的敌人（相对于屏幕中心）
+            screen_center = (0.5, 0.5)
+            closest_enemy = min(
+                enemies,
+                key=lambda e: (e[0] - screen_center[0]) ** 2 + (e[1] - screen_center[1]) ** 2
+            )
+
+            print(closest_enemy[0],closest_enemy[1])
+            # 移动准心到敌人位置
+            self.controller._direct_move(closest_enemy[0], closest_enemy[1])
+
+            # 执行攻击
+            self.controller.click()
+
+            # 保存战斗截图
+            frame = self.vision.capture()
+            if frame is not None:
+                cv2.imwrite(f'debug/combat_{self.cycle_count:04d}.jpg', frame)
+        else:
+            print("no visual of the enemy now,do nothing")
+
 
 if __name__ == "__main__":
     bot = GameBot()

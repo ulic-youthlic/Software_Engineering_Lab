@@ -1,11 +1,11 @@
 {
-  "total_cycles": 6,
-  "start_time": "2025-06-15T13:11:12.797881",
-  "end_time": "2025-06-15T13:11:25.993049",
-  "average_reward": 3.642857142857143,
-  "success_rate": 0.0,
+  "total_cycles": 4,
+  "start_time": "2025-06-17T18:26:42.761349",
+  "end_time": "2025-06-17T18:26:56.477726",
+  "average_reward": 3.306252098083496,
+  "success_rate": 0.2,
   "action_counts": {
-    "turn": 2,
-    "move": 5
+    "turn": 3,
+    "move": 2
   }
 }

@@ -213,13 +213,16 @@ class EnhancedInputSimulator:
 
     def _direct_move(self, x, y):
         """直线移动，添加随机抖动"""
+        '''
         target_x = int(x * self.screen_width) + random.randint(-self.jitter_range, self.jitter_range)
         target_y = int(y * self.screen_height) + random.randint(-self.jitter_range, self.jitter_range)
 
+        '''
+        target_x = int(x * self.screen_width)
+        target_y = int(y * self.screen_height)
         # 边界检查
         target_x = max(0, min(self.screen_width - 1, target_x))
         target_y = max(0, min(self.screen_height - 1, target_y))
-
         # 随机移动时间
         duration = random.uniform(self.move_config['min_duration'], self.move_config['max_duration'])
         pydirectinput.moveTo(target_x, target_y, duration=duration)
